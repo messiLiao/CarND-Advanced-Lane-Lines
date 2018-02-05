@@ -385,7 +385,6 @@ def finding_line_slide_window(binary, debug=False):
         left_fitx = left_fit[0]*l_y**2 + left_fit[1]*l_y + left_fit[2]
         right_fit = np.polyfit(r_y, r_x, 2)
         right_fitx = right_fit[0]*r_y**2 + right_fit[1]*r_y + right_fit[2]
-        r_y = np.linespace()
         # plt.plot(l_x, r_y, 'o', color='red', markersize=mark_size)
         # plt.plot(r_x, r_y, 'o', color='blue', markersize=mark_size)
         plt.plot(left_fitx, r_y, color='green', linewidth=3)
