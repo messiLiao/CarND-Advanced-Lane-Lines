@@ -382,21 +382,34 @@ def finding_line_slide_window(binary, debug=False):
 
         mark_size = 3
         left_fit = np.polyfit(l_y, l_x, 2)
-        left_fitx = left_fit[0]*l_y**2 + left_fit[1]*l_y + left_fit[2]
+        # left_fitx = left_fit[0]*l_y**2 + left_fit[1]*l_y + left_fit[2]
         right_fit = np.polyfit(r_y, r_x, 2)
-        right_fitx = right_fit[0]*r_y**2 + right_fit[1]*r_y + right_fit[2]
+        # right_fitx = right_fit[0]*r_y**2 + right_fit[1]*r_y + right_fit[2]
+        y = np.linspace(0, 719, num=72).astype(np.int32)
+        leftx = np.int0(left_fit[0]*y**2 + left_fit[1]*y + left_fit[2])
+        rightx = np.int0(right_fit[0]*y**2 + right_fit[1]*y + right_fit[2])
+        empty = np.zeros_like(warped)
+        empty = np.dstack([empty, empty, empty])
+        for pi in range(len(y) - 1):
+            cv2.line(empty, (leftx[pi], y[pi]), (rightx[pi], y[pi]), (0, 255, 0), 10)
+        for pi in range(len(y) - 1):
+            cv2.line(empty, (leftx[pi+1], y[pi+1]), (leftx[pi], y[pi]), (0, 0, 255), 10)
+            cv2.line(empty, (rightx[pi+1], y[pi+1]), (rightx[pi], y[pi]), (0, 0, 255), 10)
+        cv2.imshow('empty', empty)
         # plt.plot(l_x, r_y, 'o', color='red', markersize=mark_size)
         # plt.plot(r_x, r_y, 'o', color='blue', markersize=mark_size)
-        plt.plot(left_fitx, r_y, color='green', linewidth=3)
-        plt.plot(right_fitx, r_y, color='green', linewidth=3)
+        plt.plot(leftx, y, color='green', linewidth=3)
+        plt.plot(rightx, y, color='green', linewidth=3)
         plt.gca().invert_yaxis() # to visualize as we do the images
-        plt.show()
+        # plt.show()
         # Draw the results
         template = np.array(r_points+l_points,np.uint8) # add both left and right window pixels together
         zero_channel = np.zeros_like(template) # create a zero color channel
         template = np.array(cv2.merge((zero_channel,template,zero_channel)),np.uint8) # make window pixels green
         warpage= np.dstack((warped, warped, warped))*255 # making the original road pixels 3 color channels
         output = cv2.addWeighted(warpage, 1, template, 0.5, 0.0) # overlay the orignal road image with window results
+
+        output = empty
      
     # If no window centers found, just display orginal road image
     else:
@@ -419,10 +432,10 @@ def find_lane_line_image(image):
     origin = image.copy()
 
     h = 720
-    src_points = lane_line_points
-    for i in range(len(src_points)):
-        cv2.line(origin, src_points[i-1], src_points[i], (255, 0, 0), 1)
-    cv2.imshow('origin', origin)
+    # src_points = lane_line_points
+    # for i in range(len(src_points)):
+    #     cv2.line(origin, src_points[i-1], src_points[i], (255, 0, 0), 1)
+    # cv2.imshow('origin', origin)
 
     transform_mat = get_transform_mat()
 
@@ -434,8 +447,12 @@ def find_lane_line_image(image):
 
     cv2.imshow('threshold', threshold.astype(np.float32))
     line_image = finding_line_slide_window(threshold.astype(np.uint8))
-    cv2.imshow('line_image', line_image.astype(np.float32))
-    cv2.waitKey(100)
+    line_image = transform_image(line_image, np.linalg.inv(transform_mat))
+    line_image = cv2.addWeighted(origin, 0.8, line_image, 0.2, 0)
+    print line_image.dtype, origin.dtype
+    cv2.imshow('line_image', line_image.astype(np.uint8))
+    cv2.waitKey(10)
+    return line_image.astype(np.uint8)
 
 
 def process_image(arg):
@@ -471,11 +488,23 @@ def process_video(arg):
     else:
         return None
     cap = cv2.VideoCapture(video_fn)
+
+    if arg.output:
+        output_fn = arg.output
+        fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)  
+        size = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),   
+                int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))  
+        out = cv2.VideoWriter(output_fn, cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), fps, size, 1) 
+    else:
+        out = None
     while True:
         # get a frame
         ret, frame = cap.read()
         if ret:
-            find_lane_line_image(frame)
+            image = find_lane_line_image(frame)
+            if out:
+                out.write(image)
+            
             # pause = False
             # while True:         
 
@@ -498,11 +527,14 @@ if __name__ == '__main__':
 
     image_parse = subparsers.add_parser('image', help='calibrate a camera with chessboard pictures')
     image_parse.set_defaults(func=process_image)
+    image_parse.add_argument("input", action='store',help='image file or directory.')
+    image_parse.add_argument("--output", action='store',help='save result image to another file')
 
     video_parse = subparsers.add_parser('video', help='calibrate a camera with chessboard pictures')
     video_parse.set_defaults(func=process_video)
     
-    parser.add_argument("input", action='store',help='image file or *.mp4 file or directory.')
+    video_parse.add_argument("input", action='store',help='*.mp4 file or directory.')
+    video_parse.add_argument("--output", action='store',help='save result video to another file')
      
     args = parser.parse_args(sys.argv[1:])
     args.func(args)

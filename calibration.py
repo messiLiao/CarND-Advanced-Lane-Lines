@@ -51,6 +51,8 @@ def calibration_images(arg):
 
         # get tranform matrix from un-distort view to top-down view.
         dst_corners = np.array([(offset, offset), (w - offset, offset), (offset, h - offset), (w - offset, h - offset)], dtype=np.float32)
+        print fn, undis_src_corners, dst_corners
+        break
         M = cv2.getPerspectiveTransform(undis_src_corners, dst_corners)
 
         # transform un-distort image to top-down view.
@@ -70,6 +72,7 @@ def calibration_images(arg):
             if os.path.isdir(arg.output):
                 base, f = os.path.split(fn)
                 new_fn = os.path.join(arg.output, f)
+                print new_fn
                 plt.savefig(new_fn)
             # display image if needed
             if arg.show:
