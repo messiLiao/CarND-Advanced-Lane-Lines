@@ -130,14 +130,14 @@ def threshold_image(image, debug=False):
 
     def on_mouse_event(event,x,y,flags,param):
        if event==cv2.EVENT_FLAG_LBUTTON:
-           print 'press:', x, y
+           print(( 'press:', x, y))
 
     image = cv2.GaussianBlur(image, (5, 5), 0)
 
     # type, show_range, scale, default_value, 
     if debug:
         default_value = {}
-        for name, param in param_dict.items():
+        for name, param in list(param_dict.items()):
             p_type = param[0]
             p_range = param[1]
             p_scale = param[2]
@@ -156,15 +156,15 @@ def threshold_image(image, debug=False):
         ksize = 3 # Choose a larger odd number to smooth gradient measurements
         if debug:
             new_value = {}
-            for name, param in param_dict.items():
+            for name, param in list(param_dict.items()):
                 min_val = cv2.getTrackbarPos('Min',name)
                 max_val = cv2.getTrackbarPos('Max',name)
                 param[3][0] = min_val * param[2]
                 param[3][1] = max_val * param[2]
                 new_value[name] = (min_val, max_val)
 
-            if len([1 for name in new_value.keys() if default_value[name]!=new_value[name]]):
-                print new_value
+            if len([1 for name in list(new_value.keys()) if default_value[name]!=new_value[name]]):
+                print (new_value)
                 default_value = {}
                 default_value.update(new_value)
 
@@ -189,19 +189,26 @@ def threshold_image(image, debug=False):
             cv2.imshow('dir', dir_binary.astype(np.float32))
             cv2.imshow('hls_s', hls_binary.astype(np.float32))
             cv2.imshow('combined', combined.astype(np.float32))
-            key = cv2.waitKey(10) & 0xff
+            key = cv2.waitKey(0) & 0xff
             if key in [ord('q'), ord('Q'), 23]:
                 should_exit = True
                 break
             if key in [ord(' ')]:
                 break
+            if key in [ord('s'), ord('S')]:
+                cv2.imwrite('./output_images/test_gradx.jpg', gradx * 255)
+                cv2.imwrite('./output_images/test_grady.jpg', grady * 255)
+                cv2.imwrite('./output_images/test_mag.jpg', mag_binary * 255)
+                cv2.imwrite('./output_images/test_dir.jpg', dir_binary * 255)
+                cv2.imwrite('./output_images/test_hls.jpg', hls_binary * 255)
+                cv2.imwrite('./output_images/test_combined.jpg', combined * 255)
         else:
             break
     return combined
 
 
 lane_line_points = ((236, 720), (617, 438), (666, 438), (1099, 720))
-# project_video.map
+# project_video.ma4
 lane_line_points = ((312, 680), (570, 481), (741, 481), (1094, 680))
 
 def undisort_image(image, mtx, dist):
@@ -302,7 +309,7 @@ def finding_line(binary):
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
 
-def finding_line_slide_window(binary, debug=False):
+def finding_line_slide_window(binary, debug=False, output_line=None):
     warped = binary
     # window settings
     window_width = 80 
@@ -361,55 +368,58 @@ def finding_line_slide_window(binary, debug=False):
         l_points = np.zeros_like(warped)
         r_points = np.zeros_like(warped)
 
-        l_x = np.zeros((len(window_centroids),))
-        l_y = np.zeros((len(window_centroids),))
-        r_x = np.zeros((len(window_centroids),))
-        r_y = np.zeros((len(window_centroids),))
         # Go through each level and draw the windows    
         for level in range(0,len(window_centroids)):
-            l_x[level] = window_centroids[level][0]
-            l_y[level] = level * window_height
-            r_x[level] = window_centroids[level][1]
-            r_y[level] = level * window_height
+
             # Window_mask is a function to draw window areas
             l_mask = window_mask(window_width,window_height,warped,window_centroids[level][0],level)
             r_mask = window_mask(window_width,window_height,warped,window_centroids[level][1],level)
             # Add graphic points from window mask here to total pixels found 
             l_points[(l_points == 255) | ((l_mask == 1) ) ] = 255
             r_points[(r_points == 255) | ((r_mask == 1) ) ] = 255
-        l_x = l_x[::-1]
-        r_x = r_x[::-1]
 
-        mark_size = 3
+        ##################
+        # fit right pixes again
+        r_mask = np.array(r_points,np.uint8) 
+        r_warp = warped.copy()
+        r_warp[np.where(r_mask==0)] = 0
+        # cv2.imshow('r_warp', r_warp * 255)
+        r_y, r_x = np.where(r_warp > 0)
+        ##################
+        ##################
+        # fit left pixes again
+        l_mask = np.array(l_points,np.uint8)
+        l_warp = warped.copy()
+        l_warp[np.where(l_mask==0)] = 0
+        # cv2.imshow('l_warp', l_warp * 255)
+        l_y, l_x = np.where(l_warp > 0)
+        ##################
+        # draw lane lines
+        zero_channel = np.zeros_like(warped) # create a zero color channel
         left_fit = np.polyfit(l_y, l_x, 2)
-        # left_fitx = left_fit[0]*l_y**2 + left_fit[1]*l_y + left_fit[2]
+        left_fitx = left_fit[0]*l_y**2 + left_fit[1]*l_y + left_fit[2]
         right_fit = np.polyfit(r_y, r_x, 2)
-        # right_fitx = right_fit[0]*r_y**2 + right_fit[1]*r_y + right_fit[2]
+        
+        right_fitx = right_fit[0]*r_y**2 + right_fit[1]*r_y + right_fit[2]
         y = np.linspace(0, 719, num=72).astype(np.int32)
         leftx = np.int0(left_fit[0]*y**2 + left_fit[1]*y + left_fit[2])
         rightx = np.int0(right_fit[0]*y**2 + right_fit[1]*y + right_fit[2])
-        empty = np.zeros_like(warped)
+        empty = np.zeros_like(r_warp)
         empty = np.dstack([empty, empty, empty])
         for pi in range(len(y) - 1):
             cv2.line(empty, (leftx[pi], y[pi]), (rightx[pi], y[pi]), (0, 255, 0), 10)
         for pi in range(len(y) - 1):
             cv2.line(empty, (leftx[pi+1], y[pi+1]), (leftx[pi], y[pi]), (0, 0, 255), 10)
             cv2.line(empty, (rightx[pi+1], y[pi+1]), (rightx[pi], y[pi]), (0, 0, 255), 10)
-        cv2.imshow('empty', empty)
-        # plt.plot(l_x, r_y, 'o', color='red', markersize=mark_size)
-        # plt.plot(r_x, r_y, 'o', color='blue', markersize=mark_size)
-        plt.plot(leftx, y, color='green', linewidth=3)
-        plt.plot(rightx, y, color='green', linewidth=3)
-        plt.gca().invert_yaxis() # to visualize as we do the images
-        # plt.show()
-        # Draw the results
-        template = np.array(r_points+l_points,np.uint8) # add both left and right window pixels together
-        zero_channel = np.zeros_like(template) # create a zero color channel
-        template = np.array(cv2.merge((zero_channel,template,zero_channel)),np.uint8) # make window pixels green
         warpage= np.dstack((warped, warped, warped))*255 # making the original road pixels 3 color channels
-        output = cv2.addWeighted(warpage, 1, template, 0.5, 0.0) # overlay the orignal road image with window results
-
+        output = cv2.addWeighted(warpage, 0.5, empty, 0.5, 0.0) # overlay the orignal road image with window results
+        # cv2.imwrite("output_images/test1_color_fit.jpg", output)
+        # cv2.imshow('output_undistort', empty)
+        ##################
         output = empty
+        if type(output_line) is list:
+            output_line.append(left_fit)
+            output_line.append(right_fit)
      
     # If no window centers found, just display orginal road image
     else:
@@ -421,6 +431,11 @@ def finding_line_slide_window(binary, debug=False):
         plt.title('window fitting results')
         plt.show()
     return output
+
+def calc_line_curvature(line, y=0):
+    a, b, c = line[:3]
+    r_curv = pow((1 + pow(2 * a * y + b, 2)), 3/2.0) / np.abs(a * 2)
+    return r_curv
 
 def find_lane_line_image(image):
     fn = './calibration_data.pickle'
@@ -434,7 +449,7 @@ def find_lane_line_image(image):
     h = 720
     # src_points = lane_line_points
     # for i in range(len(src_points)):
-    #     cv2.line(origin, src_points[i-1], src_points[i], (255, 0, 0), 1)
+    #     cv2.line(origin, src_points[i-1], src_points[i], (255, 0, 0), 4)
     # cv2.imshow('origin', origin)
 
     transform_mat = get_transform_mat()
@@ -442,19 +457,28 @@ def find_lane_line_image(image):
     threshold = threshold_image(image, debug=False)
 
     image = transform_image(image, transform_mat)
+    # cv2.imwrite("./output_images/test1_warped_straight_lines.jpg", np.hstack((origin, image)))
     threshold = transform_image(threshold, transform_mat)
 
 
-    cv2.imshow('threshold', threshold.astype(np.float32))
-    line_image = finding_line_slide_window(threshold.astype(np.uint8))
-    line_image = transform_image(line_image, np.linalg.inv(transform_mat))
+    # cv2.imshow('threshold', threshold.astype(np.float32))
+    output_lines = []
+    
+    line_image = finding_line_slide_window(threshold.astype(np.uint8), output_line = output_lines)
+    
+    left_fit, right_fit = output_lines
+
+    s = 'Radius of Curvature = %.1f m' % calc_line_curvature(left_fit)
+    
+    line_image = transform_image(line_image, np.linalg.inv(transform_mat)).astype(np.uint8)
     line_image = cv2.addWeighted(origin, 0.8, line_image, 0.2, 0)
-    print line_image.dtype, origin.dtype
-    cv2.imshow('line_image', line_image.astype(np.uint8))
+    # cv2.putText(line_image, s, (10, 60), cv2.FONT_HERSHEY_TRIPLEX, 2, (255, 255, 255), 1, False)
+    # cv2.imwrite("output_images/test1_output.jpg", line_image)
+    cv2.imshow('lane_line', line_image.astype(np.uint8))
+    # cv2.imwrite('./output_images/test_lane_line.jpg', line_image.astype(np.uint8))
     cv2.waitKey(10)
     return line_image.astype(np.uint8)
-
-
+    
 def process_image(arg):
     fn_list = []
     if os.path.isfile(arg.input):
@@ -467,10 +491,10 @@ def process_image(arg):
         fn_list = []
 
     if len(fn_list) < 1:
-        print "No image file found."
+        print ("No image file found.")
 
     for fn in fn_list:
-        print "process image filename :", fn
+        print( ("process image filename :", fn))
         image = cv2.imread(fn)
         find_lane_line_image(image)
         if should_exit:
@@ -481,8 +505,8 @@ def process_image(arg):
 def process_video(arg):       
     def on_mouse_event(event,x,y,flags,param):
        if event==cv2.EVENT_FLAG_LBUTTON:
-           print 'press:', x, y
-    print "process_video...", arg.input
+           print(( 'press:', x, y))
+    print (("process_video...", arg.input))
     if os.path.isfile(arg.input):
         video_fn = arg.input
     else:

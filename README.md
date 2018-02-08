@@ -37,3 +37,33 @@ If you're feeling ambitious (again, totally optional though), don't stop there! 
 ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
 
+
+## Calibration a camera
+1. calibration
+```bash
+python calibration.py calibrate ./camera_cal
+```
+2. un-distort image
+```bash
+python calebration.py undistort ./test_images/test1.jpg --save ./test_images/test1_undistort.jpg
+```
+
+## Finding Lane Line:
+1. in a image file:
+
+```bash
+python findLaneLine.py image image_file
+```
+
+
+2. in a images contain in a directory
+
+```bash
+python findLaneLine.py image image_dir
+```
+
+3. in a video file 
+```bash
+python findLaneLine.py video video.mp4 --output video_output.mp4
+```
+
