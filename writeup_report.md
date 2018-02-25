@@ -68,24 +68,22 @@ distortion correction result image:
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 126 through 206 in `findLaneLine.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 128 through 209 in `findLaneLine.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
 
 ![alt text][image2_combined]
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `get_transform_mat()`, which appears in lines 218 through 232 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `get_transform_mat()` function takes as source (`src`) and destination (`dst`) points, and retururn perspective transform matrix.  I chose the hardcode the source and destination points in the following manner:
+The code for my perspective transform includes a function called `get_transform_mat()`, which appears in lines 220 through 232 in the file `findLaneline.py`.  The `get_transform_mat()` function takes as source (`src_points`) and destination (`dst_points`) points, and retururn perspective transform matrix.  I chose the hardcode the source and destination points in the following manner:
 
 ```python
-lane_line_points = ((312, 680), (570, 481), (741, 481), (1094, 680))
+lane_line_points = ((303, 689), (584, 467), (716, 467), (1098, 689))
 src_points = np.array(lane_line_points, dtype=np.float32)
 
-x_left = src_points[0, 0]
-x_right = src_points[-1, 0]
-y_top = src_points[1, 1]
+x_left, x_right = 200, 800
 
 # get tranform matrix from un-distort view to top-down view.
-dst_points = np.array([(x_left, h), (x_left, 0), (x_right, 0), (x_right, h)], dtype=np.float32)
+dst_points = np.array([(x_left, h), (x_left, 200), (x_right, 200), (x_right, h)], dtype=np.float32)
 M = cv2.getPerspectiveTransform(src_points, dst_points)
 ```
 
@@ -118,11 +116,11 @@ Then I did some other stuff and fit my lane lines with a 2nd order polynomial ki
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `findLneLine.py`
+I did this in lines 471 through 486 in my code in `findLneLine.py` in the function `calc_line_curvature()`
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines 435 through 438 in my code in `findLaneLine.py` in the function `calc_line_curvature()`.  Here is an example of my result on a test image:
+I implemented this step in lines 488 through 539 in my code in `findLaneLine.py` in the function `find_lane_line_image()`.  Here is an example of my result on a test image:
 
 ![alt text][image2_output]
 

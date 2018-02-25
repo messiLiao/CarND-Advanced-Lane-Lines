@@ -10,6 +10,94 @@ try:
 except:
     import cPickle as pickle
 
+def calibrate_main(arg):
+    if os.path.isdir(arg.dirname):
+        calibration_images(arg)
+    else:
+        calibration_video(arg)
+
+def transform_main(arg):
+    fn = arg.filename
+    f, ext = os.path.splitext(fn)
+    if ext in ['.mp4', '.avi', '.mpg']:
+        transform_video(fn)
+    elif ext in ['.jpg', '.jpeg', '.bmp', '.png']:
+        transform_image(fn)
+    else:
+        pass
+        pass
+
+def transform_video(fn):
+    point_list = [(303, 689), (584, 467), (716, 467), (1098, 689)]
+    def on_mouse_event(event,x,y,flags,param):
+       if event==cv2.EVENT_FLAG_LBUTTON:
+           print(( 'press:', x, y))
+           add_cross_point((x, y))
+           print point_list
+    def add_cross_point(point):
+        index = -1
+        distance = 9e9
+        x, y = point
+        for i, (_x, _y) in enumerate(point_list):
+            dis = (x - _x) ** 2 + (y - _y) ** 2
+            if dis < distance:
+                index = i
+                distance = dis
+        if index >= 0:
+            point_list[index] = point
+    cap = cv2.VideoCapture(fn)
+    pause = False
+    exit = False
+    with open('./calibration_data.pickle', 'r') as fd:
+        calibration_data = pickle.load(fd)
+
+    mtx, dist = calibration_data['mtx'], calibration_data['dist']
+    skip_index = 0
+    image_index = 0
+    if cap:
+        while not exit:
+            ret, frame = cap.read()
+            image_index += 1
+            if image_index < skip_index:
+                continue
+
+            undis_image = cv2.undistort(frame, mtx, dist, None, mtx)
+            if ret:
+                while True:
+                    # cv2.imshow('frame', frame)
+                    line_image = undis_image.copy()
+                    cv2.line(line_image, point_list[0], point_list[1], (0, 255, 200), 10)
+                    cv2.line(line_image, point_list[2], point_list[3], (0, 255, 200), 10)
+                    # cv2.imshow('undistort', line_image)
+
+                    src_points = np.array(point_list, dtype=np.float32)
+                    h, w = line_image.shape[:2]
+                    x_left, x_right = 200, 1080
+                    dst_points = np.array([(x_left, h), (x_left, 100), (x_right, 100), (x_right, h)], dtype=np.float32)
+                    M = cv2.getPerspectiveTransform(src_points, dst_points)
+                    top_down = cv2.warpPerspective(undis_image, M, (w, h))
+                    # cv2.imshow('Perspective', top_down)
+
+                    cv2.setMouseCallback('undistort', on_mouse_event)
+                    key = cv2.waitKey(50) & 0xff
+                    if key in [ord(' ')]:
+                        pause = not pause
+                    elif key in [ord('q'), 23]:
+                        exit = True
+                        break
+                        pass
+                    if not pause:
+                        break
+            else:
+                break
+    pass
+
+def transform_image(fn):
+    pass
+
+def calibration_video(arg):
+    pass
+
 def calibration_images(arg):
     fn_list = [os.path.join(arg.dirname, fn) for fn in os.listdir(arg.dirname)]
     imgpoints = []
@@ -114,12 +202,19 @@ if __name__ == '__main__':
     cali_parse.add_argument("dirname", action='store',help='The directory which contains chessboard pictures')
     cali_parse.add_argument("--output", action='store', help='Save un-distort image to a directory')
     cali_parse.add_argument("--show", action='store_true', help='Show un-distort image')
-    cali_parse.set_defaults(func=calibration_images)
+    cali_parse.set_defaults(func=calibrate_main)
+
     dist_parse = subparsers.add_parser('distort', help='distort a image')
     dist_parse.add_argument("image_name", action='store',help='The image filename')
     dist_parse.add_argument("--save", action='store',help='save the undistort image to file')
     dist_parse.add_argument("--show", action='store_true',help='show image and undistort image')
     dist_parse.set_defaults(func=distort_image)
+
+    trans_parse = subparsers.add_parser('transform', help='calibrate a camera with chessboard pictures')
+    trans_parse.add_argument("filename", action='store',help='The directory which contains chessboard pictures')
+    trans_parse.add_argument("--output", action='store', help='Save un-distort image to a directory')
+    trans_parse.add_argument("--show", action='store_true', help='Show un-distort image')
+    trans_parse.set_defaults(func=transform_main)
      
     args = parser.parse_args(sys.argv[1:])
     args.func(args)

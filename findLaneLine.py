@@ -4,6 +4,7 @@ import sys
 import numpy as np
 from matplotlib import pyplot as plt
 import argparse
+import time
 
 try:
     import pickle
@@ -11,6 +12,7 @@ except:
     import cPickle as pickle
 
 should_exit = False
+should_pause = False
 
 def abs_sobel_thresh(img, orient='x', sobel_kernel=5, thresh=(0, 255)):    
     # Apply the following steps to img
@@ -110,7 +112,7 @@ param_dict['dir'] = [float, (0, 314), 0.01, [0.7, 1.2]]
 
 # yellow threshold in hsv color space
 param_dict['hls_h'] = [int, (0, 180), 1,[90, 100]] # h
-param_dict['hls_l'] = [int, (0, 255), 1,[43, 255]] # s
+param_dict['hls_l'] = [int, (0, 255), 1,[200, 255]] # s
 param_dict['hls_s'] = [int, (0, 255), 1,[46, 255]] # v
 
 # white threshold in hls color space
@@ -163,7 +165,7 @@ def threshold_image(image, debug=False):
                 param[3][1] = max_val * param[2]
                 new_value[name] = (min_val, max_val)
 
-            if len([1 for name in list(new_value.keys()) if default_value[name]!=new_value[name]]):
+            if len([1 for name in list(new_value.keys()) if default_value[name]!=new_value[name]]) > 0:
                 print (new_value)
                 default_value = {}
                 default_value.update(new_value)
@@ -177,8 +179,8 @@ def threshold_image(image, debug=False):
         dir_binary = dir_threshold(image, sobel_kernel=ksize, thresh=(pd['dir'][3][0], pd['dir'][3][1]))
         hls_binary = hls_select(image, thresh_h=(pd['hls_h'][3][0], pd['hls_h'][3][1]), thresh_l=(pd['hls_l'][3][0], pd['hls_l'][3][1]), thresh_s=(pd['hls_s'][3][0], pd['hls_s'][3][1]))
         combined = np.zeros_like(dir_binary)
-        combined[(((gradx == 1) & (grady == 1)) | ((mag_binary == 1) & (dir_binary == 1))  | (hls_binary == 1))] = 1
-        # combined[(hls_binary == 1)] = 1
+        combined[(((gradx == 1) & (grady == 1) & (hls_binary == 1)) | ((mag_binary == 1) & (dir_binary == 1))  | (hls_binary == 1))] = 1
+        # combined[(((gradx == 1) & (grady == 1)) )] = 1
 
         if debug:
             cv2.imshow('image', image)
@@ -189,7 +191,7 @@ def threshold_image(image, debug=False):
             cv2.imshow('dir', dir_binary.astype(np.float32))
             cv2.imshow('hls_s', hls_binary.astype(np.float32))
             cv2.imshow('combined', combined.astype(np.float32))
-            key = cv2.waitKey(0) & 0xff
+            key = cv2.waitKey(100) & 0xff
             if key in [ord('q'), ord('Q'), 23]:
                 should_exit = True
                 break
@@ -209,7 +211,7 @@ def threshold_image(image, debug=False):
 
 lane_line_points = ((236, 720), (617, 438), (666, 438), (1099, 720))
 # project_video.ma4
-lane_line_points = ((312, 680), (570, 481), (741, 481), (1094, 680))
+lane_line_points = ((303, 689), (584, 467), (716, 467), (1098, 689))
 
 def undisort_image(image, mtx, dist):
     undis_image = cv2.undistort(image, mtx, dist, None, mtx)
@@ -222,12 +224,10 @@ def get_transform_mat(offset=200, shape=(1280, 720)):
 
     src_points = np.array(lane_line_points, dtype=np.float32)
 
-    x_left = src_points[0, 0]
-    x_right = src_points[-1, 0]
-    y_top = src_points[1, 1]
+    x_left, x_right = 200, 800
 
     # get tranform matrix from un-distort view to top-down view.
-    dst_points = np.array([(x_left, h), (x_left, 0), (x_right, 0), (x_right, h)], dtype=np.float32)
+    dst_points = np.array([(x_left, h), (x_left, 200), (x_right, 200), (x_right, h)], dtype=np.float32)
     M = cv2.getPerspectiveTransform(src_points, dst_points)
     return M
 
@@ -309,11 +309,39 @@ def finding_line(binary):
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
 
+def finding_line_with_preframe_line(binary, pre_frame_line):
+    left_fit, right_fit = pre_frame_line
+    mask = np.zeros_like(binary, dtype=np.uint8)
+    y = np.linspace(0, 719, num=72).astype(np.int32)
+    leftx = np.int0(left_fit[0]*y**2 + left_fit[1]*y + left_fit[2])
+    for pi in range(len(y) - 1):
+        cv2.line(mask, (leftx[pi+1], y[pi+1]), (leftx[pi], y[pi]), (255,), 20)
+
+    warped = binary & mask
+    l_y, l_x = np.where(warped > 0)
+    # cv2.imshow('warpedggg', mask)
+    # cv2.waitKey(0)
+    left_fit = np.polyfit(l_y, l_x, 2)
+    right_fit = left_fit.copy()
+    right_fit[2] += 620
+
+    empty = np.zeros_like(binary)
+    empty = np.dstack([empty, empty, empty])
+    leftx = np.int0(left_fit[0]*y**2 + left_fit[1]*y + left_fit[2])
+    rightx = np.int0(right_fit[0]*y**2 + right_fit[1]*y + right_fit[2])
+    for pi in range(len(y) - 1):
+        cv2.line(empty, (leftx[pi], y[pi]), (rightx[pi], y[pi]), (0, 255, 0), 10)
+    for pi in range(len(y) - 1):
+        cv2.line(empty, (leftx[pi+1], y[pi+1]), (leftx[pi], y[pi]), (0, 0, 255), 10)
+        cv2.line(empty, (rightx[pi+1], y[pi+1]), (rightx[pi], y[pi]), (0, 0, 255), 10)
+
+    return empty, [left_fit, right_fit]
+
 def finding_line_slide_window(binary, debug=False, output_line=None):
     warped = binary
     # window settings
-    window_width = 80 
-    window_height = 120 # Break image into 9 vertical layers since image height is 720
+    window_width = 60 
+    window_height = 180 # Break image into 9 vertical layers since image height is 720
     margin = 100 # How much to slide left and right for searching
 
     def window_mask(width, height, img_ref, center,level):
@@ -334,6 +362,7 @@ def finding_line_slide_window(binary, debug=False, output_line=None):
         l_center = np.argmax(np.convolve(window,l_sum))-window_width/2
         r_sum = np.sum(image[int(3*image.shape[0]/4):,int(image.shape[1]/2):], axis=0)
         r_center = np.argmax(np.convolve(window,r_sum))-window_width/2+int(image.shape[1]/2)
+        # print r_center, -window_width/2+int(image.shape[1]/2)
         
         # Add what we found for the first layer
         window_centroids.append((l_center,r_center))
@@ -354,6 +383,7 @@ def finding_line_slide_window(binary, debug=False, output_line=None):
             r_min_index = int(max(r_center+offset-margin,0))
             r_max_index = int(min(r_center+offset+margin,image.shape[1]))
             r_center = np.argmax(conv_signal[r_min_index:r_max_index])+r_min_index-offset
+            # print r_center, -window_width/2+int(image.shape[1]/2)
             # Add what we found for that layer
             window_centroids.append((l_center,r_center))
 
@@ -378,12 +408,15 @@ def finding_line_slide_window(binary, debug=False, output_line=None):
             l_points[(l_points == 255) | ((l_mask == 1) ) ] = 255
             r_points[(r_points == 255) | ((r_mask == 1) ) ] = 255
 
+        # cv2.imshow('r_points', r_points)
+        # cv2.imshow('l_points', l_points)
         ##################
         # fit right pixes again
         r_mask = np.array(r_points,np.uint8) 
         r_warp = warped.copy()
         r_warp[np.where(r_mask==0)] = 0
         # cv2.imshow('r_warp', r_warp * 255)
+        # cv2.imshow('warp', warped.astype(np.float32))
         r_y, r_x = np.where(r_warp > 0)
         ##################
         ##################
@@ -397,8 +430,11 @@ def finding_line_slide_window(binary, debug=False, output_line=None):
         # draw lane lines
         zero_channel = np.zeros_like(warped) # create a zero color channel
         left_fit = np.polyfit(l_y, l_x, 2)
+        # print 'left fit:', left_fit
         left_fitx = left_fit[0]*l_y**2 + left_fit[1]*l_y + left_fit[2]
-        right_fit = np.polyfit(r_y, r_x, 2)
+        # right_fit = np.polyfit(r_y, r_x, 2)
+        right_fit = left_fit.copy()
+        right_fit[2] += 620
         
         right_fitx = right_fit[0]*r_y**2 + right_fit[1]*r_y + right_fit[2]
         y = np.linspace(0, 719, num=72).astype(np.int32)
@@ -416,7 +452,7 @@ def finding_line_slide_window(binary, debug=False, output_line=None):
         # cv2.imwrite("output_images/test1_color_fit.jpg", output)
         # cv2.imshow('output_undistort', empty)
         ##################
-        output = empty
+        # output = empty
         if type(output_line) is list:
             output_line.append(left_fit)
             output_line.append(right_fit)
@@ -433,11 +469,24 @@ def finding_line_slide_window(binary, debug=False, output_line=None):
     return output
 
 def calc_line_curvature(line, y=0):
+    # Define conversions in x and y from pixels space to meters
     a, b, c = line[:3]
     r_curv = pow((1 + pow(2 * a * y + b, 2)), 3/2.0) / np.abs(a * 2)
     return r_curv
 
-def find_lane_line_image(image):
+def calc_left_fo_center(line1, line2, y=0):
+    a, b, c = line1[:3]
+    x1 = a * (y**2) + b * y + c
+
+    a, b, c = line2[:3]
+    x2 = a * (y**2) + b * y + c
+
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+    return abs(((x2 + x1) / 2.0 - 640) * xm_per_pix)
+
+def find_lane_line_image(image, pre_frame_result=None):
+    global should_pause
     fn = './calibration_data.pickle'
     with open('./calibration_data.pickle', 'r') as fd:
         calibration_data = pickle.load(fd)
@@ -454,30 +503,40 @@ def find_lane_line_image(image):
 
     transform_mat = get_transform_mat()
 
+    image = transform_image(image, transform_mat)
+
     threshold = threshold_image(image, debug=False)
 
-    image = transform_image(image, transform_mat)
     # cv2.imwrite("./output_images/test1_warped_straight_lines.jpg", np.hstack((origin, image)))
-    threshold = transform_image(threshold, transform_mat)
+    # threshold = transform_image(threshold, transform_mat)
 
 
     # cv2.imshow('threshold', threshold.astype(np.float32))
     output_lines = []
     
-    line_image = finding_line_slide_window(threshold.astype(np.uint8), output_line = output_lines)
+    threshold = threshold * 255
+    threshold = threshold.astype(np.uint8)
+    if pre_frame_result is None:
+        line_image = finding_line_slide_window(threshold, output_line = output_lines)
+    else:
+        line_image, output_lines = finding_line_with_preframe_line(threshold, pre_frame_result)
     
     left_fit, right_fit = output_lines
 
-    s = 'Radius of Curvature = %.1f m' % calc_line_curvature(left_fit)
+    s1 = 'Radius of Curvature = %8.1f (m)' % calc_line_curvature(left_fit, 720)
+    s2 = 'Vehicle is  %4.2f m left of center' % calc_left_fo_center(left_fit, right_fit, 720)
     
     line_image = transform_image(line_image, np.linalg.inv(transform_mat)).astype(np.uint8)
     line_image = cv2.addWeighted(origin, 0.8, line_image, 0.2, 0)
-    # cv2.putText(line_image, s, (10, 60), cv2.FONT_HERSHEY_TRIPLEX, 2, (255, 255, 255), 1, False)
+    cv2.putText(line_image, s1, (10, 60), cv2.FONT_HERSHEY_TRIPLEX, 2, (255, 255, 255), 1, False)
+    cv2.putText(line_image, s2, (10, 120), cv2.FONT_HERSHEY_TRIPLEX, 2, (255, 255, 255), 1, False)
     # cv2.imwrite("output_images/test1_output.jpg", line_image)
     cv2.imshow('lane_line', line_image.astype(np.uint8))
     # cv2.imwrite('./output_images/test_lane_line.jpg', line_image.astype(np.uint8))
-    cv2.waitKey(10)
-    return line_image.astype(np.uint8)
+    # key = cv2.waitKey(10) & 0xff
+    # if key in [ord(' ')]:
+        # should_pause = not should_pause
+    return line_image.astype(np.uint8), output_lines
     
 def process_image(arg):
     fn_list = []
@@ -502,7 +561,8 @@ def process_image(arg):
 
     pass
 
-def process_video(arg):       
+def process_video(arg):
+    global should_pause, should_exit
     def on_mouse_event(event,x,y,flags,param):
        if event==cv2.EVENT_FLAG_LBUTTON:
            print(( 'press:', x, y))
@@ -518,27 +578,44 @@ def process_video(arg):
         fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)  
         size = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),   
                 int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))  
-        out = cv2.VideoWriter(output_fn, cv2.cv.CV_FOURCC('M', 'J', 'P', 'G'), fps, size, 1) 
+        out = cv2.VideoWriter(output_fn, cv2.cv.CV_FOURCC('D', 'I', 'V', 'X'), fps, size, 1) 
     else:
         out = None
+    cap_index = 0
+    # should_pause = True
+    result = None
     while True:
         # get a frame
         ret, frame = cap.read()
+        cap_index += 1
         if ret:
-            image = find_lane_line_image(frame)
+            if cap_index < 0:
+                continue
+            image, result = find_lane_line_image(frame, result)
+            # print "image index[from 1]", cap_index
             if out:
                 out.write(image)
             
-            # pause = False
-            # while True:         
 
-            #     cv2.imshow("test", frame)
-            #     cv2.setMouseCallback('test', on_mouse_event)
-            #     key = cv2.waitKey(100) & 0xff
-            #     if key in [ord(' ')]:
-            #         pause = not pause
-            #     if not pause:
-            #         break
+            while True:         
+
+                # cv2.imshow("test", frame)
+                # cv2.setMouseCallback('test', on_mouse_event)
+                cv2.imshow('lane_line', image)
+                key = cv2.waitKey(10) & 0xff
+                if key in [ord(' ')]:
+                    should_pause = not should_pause
+                elif key in [ord('q'), 23, ord('Q')]:
+                    should_exit = True
+                    break
+                elif key in [ord('n'), ord('N')]:
+                    should_pause = True
+                    break
+                if not should_pause:
+                    break
+                if should_exit:
+                    break
+                time.sleep(0.1)
         else:
             break
         if should_exit:
