@@ -88,21 +88,12 @@ M = cv2.getPerspectiveTransform(src_points, dst_points)
 ```
 
 This resulted in the following source and destination points:
-
 | Source        | Destination   | 
 |:-------------:|:-------------:| 
-| (481.15393066,  240.51397705) |  (100.   100.) |
-| ( 784.71972656,  238.10429382) | (1180.   100.) |
-| (482.56237793,  429.49038696) | (100.   620.) |
-| (785.86761475,  428.20309448) | (1180.   620.) |
-
-
-| Source        | Destination   | 
-|:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| 303, 689      | 200, 720        | 
+| 584, 467      | 200, 200      |
+| 716, 467     | 800, 200      |
+| 1098, 689      | 800, 720        |
 
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
 
@@ -116,19 +107,36 @@ Then I did some other stuff and fit my lane lines with a 2nd order polynomial ki
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines 471 through 486 in my code in `findLneLine.py` in the function `calc_line_curvature()`
+I did this in lines 505 through 516 in my code in `findLneLine.py` in the function `calc_line_curvature()`. The unit of x, and y in the fitted function is pixel, I should change the unit to meter. Every coefficient should multiply parameters.
+```python
+ym_per_pix = 30.0/720 # meters per pixel in y dimension
+xm_per_pix = 3.7/700 # meters per pixel in x dimension
+a, b, c = line[:3]
+# unit from pixel to meters
+a = a / (ym_per_pix ** 2) * xm_per_pix
+b = b / ym_per_pix * xm_per_pix
+c = c * xm_per_pix
+y = y * ym_per_pix
+```
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines 488 through 539 in my code in `findLaneLine.py` in the function `find_lane_line_image()`.  Here is an example of my result on a test image:
+I implemented this step in lines 529 through 580 in my code in `findLaneLine.py` in the function `find_lane_line_image()`.  Here is an example of my result on a test image:
 
 ![alt text][image2_output]
 
 ---
 
 ### Pipeline (video)
-
-#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
+#### 1. Solution
+After the previous analysis and testing, My last solution described as follow steps. I implemented these steps in lines 529 through 580 in my code in `findLaneLine.py` in the function `find_lane_line_image()`.
+Step 1: Undisorting image and get the top-view image. Lines 530 through 547 in my code in `findLaneLine.py`
+Step 2: I used a combination of color and gradient thresholds to generate a binary image. Lines in the 549.
+Step 1: Find the lane line in the global image in the first frame. Lines 558 through 561 in my code in `findLaneLine.py`
+Step 2: If found, then find the lane line in the previous lane line mask in the current frame, if not the repeat step 1. Lines in the 563 in my code in `findLaneLine.py`
+Step 3: Compare the lane line in the previous frame and the current. If not similar, the use a previous lane line as current. Lines 312 through 372 in my code in `findLaneLine.py` in the function `finding_line_with_preframe_line()`.
+Step 4: Until end.
+#### 2. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
 Here's a [link to my video result](./project_output.avi)
 

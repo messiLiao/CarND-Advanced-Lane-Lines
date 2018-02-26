@@ -76,7 +76,7 @@ def hls_select(img, thresh_h=(0, 180), thresh_l=(0, 255), thresh_s=(0, 255)):
     h, l, s = cv2.split(cv2.cvtColor(img, cv2.COLOR_RGB2HLS))
     # 2) Apply a threshold to the S channel
     binary_output = np.zeros_like(s, dtype=np.uint8)
-    thresh_min, thresh_max = 170, 255
+    thresh_min, thresh_max = thresh_s
 
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
@@ -101,8 +101,8 @@ def hls_select(img, thresh_h=(0, 180), thresh_l=(0, 255), thresh_s=(0, 255)):
 
  
 param_dict = {}
-param_dict['gradx'] = [int, (0, 255), 1, [20, 100]]
-param_dict['grady'] = [int, (0, 255), 1, [20, 100]]
+param_dict['gradx'] = [int, (0, 255), 1, [10, 100]]
+param_dict['grady'] = [int, (0, 255), 1, [10, 100]]
 param_dict['mag'] = [int, (0, 255), 1, [30, 100]]
 param_dict['dir'] = [float, (0, 314), 0.01, [0.7, 1.2]]
 # white threshold in hsv color space
@@ -113,7 +113,7 @@ param_dict['dir'] = [float, (0, 314), 0.01, [0.7, 1.2]]
 # yellow threshold in hsv color space
 param_dict['hls_h'] = [int, (0, 180), 1,[90, 100]] # h
 param_dict['hls_l'] = [int, (0, 255), 1,[200, 255]] # s
-param_dict['hls_s'] = [int, (0, 255), 1,[46, 255]] # v
+param_dict['hls_s'] = [int, (0, 255), 1,[60, 255]] # v
 
 # white threshold in hls color space
 # param_dict['hls_h'] = [int, (0, 180), 1,[0, 180]]
@@ -319,23 +319,57 @@ def finding_line_with_preframe_line(binary, pre_frame_line):
 
     warped = binary & mask
     l_y, l_x = np.where(warped > 0)
-    # cv2.imshow('warpedggg', mask)
-    # cv2.waitKey(0)
-    left_fit = np.polyfit(l_y, l_x, 2)
-    right_fit = left_fit.copy()
-    right_fit[2] += 620
+    new_left_fit = np.polyfit(l_y, l_x, 2)
+
+
+    mask = np.zeros_like(binary, dtype=np.uint8)
+    rightx = np.int0(right_fit[0]*y**2 + right_fit[1]*y + right_fit[2])
+    for pi in range(len(y) - 1):
+        cv2.line(mask, (rightx[pi+1], y[pi+1]), (rightx[pi], y[pi]), (255,), 20)
+
+    warped = binary & mask
+    r_y, r_x = np.where(warped > 0)
+    new_right_fit = np.polyfit(r_y, r_x, 2)
+    # new_right_fit = new_left_fit.copy()
+    # new_right_fit[2] += 620
+
+    y_test_list = [0]
+    offset = 0
+    for y_test in y_test_list:
+        a, b, c = left_fit[:3]
+        x = a * (y_test ** 2) + b * y_test + c
+
+        a, b, c = new_left_fit[:3]
+        new_x = a * (y_test ** 2) + b * y_test + c
+
+        offset += abs(new_x - x)
+    if offset > 100:
+        new_left_fit = left_fit
+
+    y_test_list = [0]
+    offset = 0
+    for y_test in y_test_list:
+        a, b, c = right_fit[:3]
+        x = a * (y_test ** 2) + b * y_test + c
+
+        a, b, c = new_right_fit[:3]
+        new_x = a * (y_test ** 2) + b * y_test + c
+
+        offset += abs(new_x - x)
+    if offset > 100:
+        new_right_fit = right_fit
 
     empty = np.zeros_like(binary)
     empty = np.dstack([empty, empty, empty])
-    leftx = np.int0(left_fit[0]*y**2 + left_fit[1]*y + left_fit[2])
-    rightx = np.int0(right_fit[0]*y**2 + right_fit[1]*y + right_fit[2])
+    leftx = np.int0(new_left_fit[0]*y**2 + new_left_fit[1]*y + new_left_fit[2])
+    rightx = np.int0(new_right_fit[0]*y**2 + new_right_fit[1]*y + new_right_fit[2])
     for pi in range(len(y) - 1):
         cv2.line(empty, (leftx[pi], y[pi]), (rightx[pi], y[pi]), (0, 255, 0), 10)
     for pi in range(len(y) - 1):
         cv2.line(empty, (leftx[pi+1], y[pi+1]), (leftx[pi], y[pi]), (0, 0, 255), 10)
         cv2.line(empty, (rightx[pi+1], y[pi+1]), (rightx[pi], y[pi]), (0, 0, 255), 10)
 
-    return empty, [left_fit, right_fit]
+    return empty, [new_left_fit, new_right_fit]
 
 def finding_line_slide_window(binary, debug=False, output_line=None):
     warped = binary
@@ -470,7 +504,14 @@ def finding_line_slide_window(binary, debug=False, output_line=None):
 
 def calc_line_curvature(line, y=0):
     # Define conversions in x and y from pixels space to meters
+    ym_per_pix = 30.0/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
     a, b, c = line[:3]
+    # unit from pixel to meters
+    a = a / (ym_per_pix ** 2) * xm_per_pix
+    b = b / ym_per_pix * xm_per_pix
+    c = c * xm_per_pix
+    y = y * ym_per_pix
     r_curv = pow((1 + pow(2 * a * y + b, 2)), 3/2.0) / np.abs(a * 2)
     return r_curv
 
@@ -481,7 +522,7 @@ def calc_left_fo_center(line1, line2, y=0):
     a, b, c = line2[:3]
     x2 = a * (y**2) + b * y + c
 
-    ym_per_pix = 30/720 # meters per pixel in y dimension
+    ym_per_pix = 30.0/720 # meters per pixel in y dimension
     xm_per_pix = 3.7/700 # meters per pixel in x dimension
     return abs(((x2 + x1) / 2.0 - 640) * xm_per_pix)
 
@@ -516,14 +557,14 @@ def find_lane_line_image(image, pre_frame_result=None):
     
     threshold = threshold * 255
     threshold = threshold.astype(np.uint8)
-    if pre_frame_result is None:
+    if pre_frame_result is None or len(pre_frame_result) < 2:
         line_image = finding_line_slide_window(threshold, output_line = output_lines)
     else:
         line_image, output_lines = finding_line_with_preframe_line(threshold, pre_frame_result)
     
     left_fit, right_fit = output_lines
 
-    s1 = 'Radius of Curvature = %8.1f (m)' % calc_line_curvature(left_fit, 720)
+    s1 = 'Radius of Curvature = %5.1f (m)' % calc_line_curvature(left_fit, 720)
     s2 = 'Vehicle is  %4.2f m left of center' % calc_left_fo_center(left_fit, right_fit, 720)
     
     line_image = transform_image(line_image, np.linalg.inv(transform_mat)).astype(np.uint8)
