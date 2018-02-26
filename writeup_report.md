@@ -146,6 +146,4 @@ Here's a [link to my video result](./project_output.avi)
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-when I process a frame in a video, I didn't use information previous frame. Avalible information which can be radius of curvature of the lane, and lane line distance and so on. Hough line method alse can use here: fx = ax^3 + bx^2 + c;
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+If the lane line was bad in the first frame for the video. All frame after that faced with the risk of failure. So limiting the shape and position of the curve would be a solution to be more robust.
