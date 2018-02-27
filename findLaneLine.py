@@ -529,7 +529,7 @@ def calc_left_fo_center(line1, line2, y=0):
 def find_lane_line_image(image, pre_frame_result=None):
     global should_pause
     fn = './calibration_data.pickle'
-    with open('./calibration_data.pickle', 'r') as fd:
+    with open('./calibration_data.pickle', 'rb') as fd:
         calibration_data = pickle.load(fd)
 
     mtx, dist = calibration_data['mtx'], calibration_data['dist']
