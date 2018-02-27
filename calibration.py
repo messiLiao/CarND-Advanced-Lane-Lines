@@ -6,9 +6,11 @@ from matplotlib import pyplot as plt
 import argparse
 
 try:
-    import pickle
-except:
     import cPickle as pickle
+    print("Python 2")
+except:
+    print("Python 3")
+    import pickle
 
 def calibrate_main(arg):
     if os.path.isdir(arg.dirname):
@@ -33,7 +35,7 @@ def transform_video(fn):
        if event==cv2.EVENT_FLAG_LBUTTON:
            print(( 'press:', x, y))
            add_cross_point((x, y))
-           print point_list
+           print (point_list)
     def add_cross_point(point):
         index = -1
         distance = 9e9
@@ -48,7 +50,7 @@ def transform_video(fn):
     cap = cv2.VideoCapture(fn)
     pause = False
     exit = False
-    with open('./calibration_data.pickle', 'r') as fd:
+    with open('./calibration_data.pickle', 'rb') as fd:
         calibration_data = pickle.load(fd)
 
     mtx, dist = calibration_data['mtx'], calibration_data['dist']
@@ -68,7 +70,7 @@ def transform_video(fn):
                     line_image = undis_image.copy()
                     cv2.line(line_image, point_list[0], point_list[1], (0, 255, 200), 10)
                     cv2.line(line_image, point_list[2], point_list[3], (0, 255, 200), 10)
-                    # cv2.imshow('undistort', line_image)
+                    cv2.imshow('undistort', line_image)
 
                     src_points = np.array(point_list, dtype=np.float32)
                     h, w = line_image.shape[:2]
@@ -76,7 +78,7 @@ def transform_video(fn):
                     dst_points = np.array([(x_left, h), (x_left, 100), (x_right, 100), (x_right, h)], dtype=np.float32)
                     M = cv2.getPerspectiveTransform(src_points, dst_points)
                     top_down = cv2.warpPerspective(undis_image, M, (w, h))
-                    # cv2.imshow('Perspective', top_down)
+                    cv2.imshow('Perspective', top_down)
 
                     cv2.setMouseCallback('undistort', on_mouse_event)
                     key = cv2.waitKey(50) & 0xff
@@ -114,15 +116,15 @@ def calibration_images(arg):
         if ret:
             imgpoints.append(corners)
             objpoints.append(objp)
-            print "found corners..", fn
+            print ("found corners..{0}".format(fn))
             found_fn_dict[fn] = corners
 
         else:
-            print 'corners not found in ', fn
+            print ('corners not found in ', fn)
 
     # step2: calerate camera by corners
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, (1280, 720), None, None)
-    print mtx.shape, dist.shape, len(rvecs), len(tvecs)
+    print ("{0},{1},{2},{3}".format(mtx.shape, dist.shape, len(rvecs), len(tvecs)))
 
     #step3: undistort image and corners.
     for fn, corners in found_fn_dict.items(): 
@@ -139,7 +141,7 @@ def calibration_images(arg):
 
         # get tranform matrix from un-distort view to top-down view.
         dst_corners = np.array([(offset, offset), (w - offset, offset), (offset, h - offset), (w - offset, h - offset)], dtype=np.float32)
-        print fn, undis_src_corners, dst_corners
+        print ("{0}, {1}, {2}".format(fn, undis_src_corners, dst_corners))
         break
         M = cv2.getPerspectiveTransform(undis_src_corners, dst_corners)
 
@@ -160,7 +162,7 @@ def calibration_images(arg):
             if os.path.isdir(arg.output):
                 base, f = os.path.split(fn)
                 new_fn = os.path.join(arg.output, f)
-                print new_fn
+                print (new_fn)
                 plt.savefig(new_fn)
             # display image if needed
             if arg.show:
@@ -171,14 +173,14 @@ def calibration_images(arg):
     calibration_data['dist'] = dist
     calibration_data['rvecs'] = rvecs
     calibration_data['tvecs'] = tvecs
-    with open('./calibration_data.pickle', 'w') as fd:
+    with open('./calibration_data.pickle', 'wb') as fd:
         pickle.dump(calibration_data, fd)
-        print "calibration data save to \"calibration_data.pickle\" successfully."
+        print("calibration data save to \"calibration_data.pickle\" successfully.")
 
 def distort_image(arg):
     fn = arg.image_name
     image = cv2.imread(fn)
-    with open('./calibration_data.pickle', 'r') as fd:
+    with open('./calibration_data.pickle', 'rb') as fd:
         calibration_data = pickle.load(fd)
 
     mtx, dist = calibration_data['mtx'], calibration_data['dist']
@@ -190,7 +192,7 @@ def distort_image(arg):
     if arg.save:
         undist_fn = arg.save
         cv2.imwrite(undist_fn, undis_image)
-        print "save to file :", undist_fn
+        print ("save to file :{0}".format(undist_fn))
         pass
 
 
